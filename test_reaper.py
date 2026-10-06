@@ -67,18 +67,30 @@ class KnockoutTests(unittest.TestCase):
         self.assertEqual(alpha.getpixel((30, 25)), 255)      # inside figure
         self.assertEqual(alpha.getpixel((15, 10)), 255)      # figure edge
 
-    def test_hollow_interior_stays_solid(self):
-        # black ring with light-gray 'robe hollow' inside, connected to the
-        # outside by a 1px light-gray anti-alias channel
+    def test_enclosed_pale_hollow_cleared(self):
+        # black figure with a pure-white hollow inside, connected to the
+        # outside by a thin pale anti-alias channel (the chest-hole case)
         im = self.make_image(80, 60, (20, 15, 60, 45))
         for y in range(25, 35):
             for x in range(30, 50):
-                im.putpixel((x, y), (255, 255, 255, 255))    # hollow interior
+                im.putpixel((x, y), (255, 255, 255, 255))    # pale hollow
         for x in range(59, 80):
             im.putpixel((x, 30), (250, 250, 250, 255))       # leak channel
         alpha = ms.knock_out_background(im)
-        self.assertEqual(alpha.getpixel((40, 30)), 255)      # hollow stays solid
+        self.assertEqual(alpha.getpixel((40, 30)), 0)        # hollow cleared
         self.assertEqual(alpha.getpixel((2, 2)), 0)          # outer bg removed
+        self.assertEqual(alpha.getpixel((21, 16)), 255)      # figure edge kept
+
+    def test_shaded_enclosed_region_stays_solid(self):
+        # skull-like content: light but with real shading (dark pixels),
+        # so it must NOT be knocked out even though it is enclosed
+        im = self.make_image(80, 60, (20, 15, 60, 45))
+        for y in range(25, 35):
+            for x in range(30, 50):
+                shade = 255 if (x + y) % 2 else 190          # shaded bone
+                im.putpixel((x, y), (shade, shade, shade, 255))
+        alpha = ms.knock_out_background(im)
+        self.assertEqual(alpha.getpixel((40, 30)), 255)      # shading kept
 
 
 class BankHasReaperFood(unittest.TestCase):

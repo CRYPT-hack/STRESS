@@ -64,6 +64,41 @@ def _flood_from_borders(bgmask, w, h):
     return visited
 
 
+def clear_enclosed_pale(px, w, h, visited, bgmask):
+    """Enclosed regions filled with flat near-white (flattened checkerboard
+    inside the figure: chest panel, gaps) become transparent.
+
+    Content that merely looks light stays: skull bone and blade carry real
+    shading, so any component with >3% pixels darker than 220 is kept.
+    """
+    seen = set()
+    cleared = 0
+    for start in range(w * h):
+        if not (bgmask[start] and not visited[start]) or start in seen:
+            continue
+        seen.add(start)
+        q = deque([start])
+        cells = [start]
+        while q:
+            j = q.popleft()
+            x, y = j % w, j // w
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                k = ny * w + nx
+                if 0 <= nx < w and 0 <= ny < h and bgmask[k] \
+                        and not visited[k] and k not in seen:
+                    seen.add(k)
+                    q.append(k)
+                    cells.append(k)
+        if len(cells) < 100:
+            continue
+        dark = sum(1 for c in cells if sum(px[c % w, c // w][:3]) // 3 < 220)
+        if dark / len(cells) < 0.03:
+            for c in cells:
+                visited[c] = 1
+            cleared += len(cells)
+    return cleared
+
+
 def knock_out_background(im):
     """Flood-fill from the borders, with a morphological closing first so
     thin anti-aliased gaps can't leak the flood into hollow parts of the
@@ -80,10 +115,12 @@ def knock_out_background(im):
     closed = bg_img.filter(ImageFilter.MinFilter(k)).filter(ImageFilter.MaxFilter(k))
     closed_mask = bytearray(1 if v > 127 else 0 for v in closed.tobytes())
     visited = _flood_from_borders(closed_mask, w, h)
+    pale = clear_enclosed_pale(px, w, h, visited, bgmask)
+    print(f"cleared {pale} px of enclosed pale fills (chest, gaps)")
     alpha = Image.new("L", (w, h), 255)
     alpha.putdata([0 if visited[i] else 255 for i in range(w * h)])
     removed = sum(visited) / (w * h)
-    if removed > 0.75:
+    if removed > 0.85:
         raise SystemExit("background knockout removed "
                          f"{removed:.0%} of the image -- wrong source?")
     return alpha
