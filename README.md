@@ -80,6 +80,40 @@ Or into your shell prompt so every new terminal reminds you:
 PS1='$(python3 /path/to/STRESS/stress_bot.py --check 2>/dev/null)\n'"$PS1"
 ```
 
+## GRIM — the desktop reaper 👻
+
+GRIM is a little grim reaper who **lives on your screen**: a transparent,
+always-on-top sprite that roams around on its own, bobs as it walks, flips
+direction, and periodically stops you with a speech-bubble quiz question.
+Left-click him for a taunt, double-click for an instant quiz, right-click
+for the menu (quiz now / voice / quit). Everything outside his sprite and
+bubble is click-through — he never blocks your desktop.
+
+His questions come from the same bank, and his answers feed the **same
+state file**: quota, streak and redemption ledger are shared with the
+terminal bot. Meet the daily quota entirely through the reaper if you like.
+
+He also *speaks* through `speech-dispatcher` (`spd-say`), if present, in a
+lowered voice. Silent on machines without it.
+
+```bash
+./grim.sh                 # normal haunting: a quiz every 4–9 minutes
+./grim.sh --test          # rapid-fire demo (first quiz after 8s)
+./grim.sh --no-voice      # silent mode
+./grim.sh --size 260      # bigger reaper
+./grim.sh --min-gap 1 --max-gap 3   # more aggressive
+```
+
+Flags: `--size` (sprite height px), `--min-gap`/`--max-gap` (minutes between
+quizzes), `--speed`, `--no-voice`, `--test`. Quit via his right-click menu.
+
+Under the hood: PyGObject/GTK3 over XWayland (`GDK_BACKEND=x11`) for free
+positioning, a 32-bit ARGB window, X11 input masks for click-through, and
+sprites built from `assets/source.webp` by `make_sprites.py` (checkerboard
+knockout via border flood-fill with morphological closing, so hollow robes
+stay solid). Auto-start on login: copy `grim.sh` into
+`~/.config/autostart/` as a `.desktop` entry, or add it to your session.
+
 ## Optional: real conversation via a local LLM
 
 If you have [ollama](https://ollama.com) installed, `/ask <question>` (and any
@@ -110,12 +144,14 @@ Study cards live in the `CARDS` dict in the same file.
 ## Development
 
 ```bash
-python3 -m unittest -v test_stress   # grader, streak math, quota logic, bank sanity
+python3 -m unittest -v test_stress    # grader, streak math, quota logic, bank sanity
+python3 -m unittest -v test_reaper    # sprite knockout, flip, reaper food
 ```
 
 Layout: `stress_bot.py` (REPL + commands) · `questions.py` (bank + cards) ·
 `grader.py` (answer grading) · `quiz.py` (selection) · `state.py` (persistence)
-· `enforcer.py` (the attitude).
+· `enforcer.py` (the attitude) · `reaper.py` + `grim.sh` (desktop reaper) ·
+`make_sprites.py` + `assets/` (sprite pipeline).
 
 ## License
 
