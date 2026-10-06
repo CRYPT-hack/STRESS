@@ -48,7 +48,7 @@ TICK_MS = 33
 QUIZ_TIMEOUT_S = 90
 FEEDBACK_S = 7
 QUIP_S = 6
-MAX_BUBBLE_W = 330
+MAX_BUBBLE_W = 360
 DEBUG = os.environ.get("STRESS_GRIM_DEBUG") == "1"
 
 TAUNTS = [
@@ -73,24 +73,51 @@ QUIP_LEAD = ["Psst.", "Hey.", "Listen.", "Mortal.", "A word."]
 CSS = b"""
 .pet-root { background-color: rgba(0,0,0,0); }
 .bubble {
-    background: rgba(12,12,18,0.92);
-    border: 1px solid rgba(255,255,255,0.28);
-    border-radius: 12px;
-    padding: 10px 12px 10px 12px;
+    background-color: rgba(10,9,14,0.97);
+    background-image: linear-gradient(to bottom,
+        rgba(34,20,30,0.97), rgba(9,8,13,0.97));
+    border: 1px solid rgba(255,82,82,0.65);
+    border-radius: 14px;
+    padding: 12px 14px 12px 14px;
 }
-.qhead { color: #ff5b5b; font-weight: bold; font-size: 10px; padding-bottom: 4px; }
-.qtext { color: #f2f2f2; font-size: 12px; }
-.fb-good { color: #7bed9f; font-size: 12px; font-weight: bold; }
-.fb-bad  { color: #ff6b6b; font-size: 12px; font-weight: bold; }
-.fb-note { color: #cfcfcf; font-size: 11px; }
+.qhead { color: #ffb4b4; font-weight: bold; font-size: 11px; padding-bottom: 5px; }
+.qtext {
+    color: #ffffff; font-size: 13px; font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+}
+.quip {
+    color: #ffe9c4; font-size: 13px; font-style: italic;
+    text-shadow: 0 0 4px rgba(255,180,80,0.35);
+}
+.fb-good {
+    color: #3ddc84; font-size: 13px; font-weight: bold;
+    text-shadow: 0 0 5px rgba(61,220,132,0.45);
+}
+.fb-bad {
+    color: #ff5566; font-size: 13px; font-weight: bold;
+    text-shadow: 0 0 5px rgba(255,85,102,0.45);
+}
+.fb-note { color: #c9c9d4; font-size: 11.5px; font-style: italic; }
 .bubble button {
-    background: rgba(52,52,64,0.95); color: #eee;
-    border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
-    padding: 4px 8px; font-size: 11px;
+    background-color: rgba(52,20,26,0.97);
+    background-image: linear-gradient(to bottom,
+        rgba(88,28,36,0.97), rgba(46,17,22,0.97));
+    color: #ffecec; font-size: 12px; font-weight: 600;
+    border: 1px solid rgba(255,96,96,0.5);
+    border-radius: 9px; padding: 5px 10px;
 }
-.bubble button:hover { background: rgba(84,84,104,0.98); }
-.bubble entry { background: rgba(30,30,38,0.95); color: #fff;
-    border: 1px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 4px 8px; }
+.bubble button:hover {
+    background-image: linear-gradient(to bottom,
+        rgba(160,38,50,0.98), rgba(104,24,32,0.98));
+    color: #ffffff;
+    border-color: rgba(255,130,130,0.9);
+}
+.bubble entry {
+    background: rgba(24,20,28,0.97); color: #ffffff; font-size: 12px;
+    caret-color: #ff5566;
+    border: 1px solid rgba(255,96,96,0.5); border-radius: 9px; padding: 5px 9px;
+}
+.bubble entry:focus { border-color: rgba(255,130,130,0.95); }
 """
 
 
@@ -347,9 +374,9 @@ class Reaper(Gtk.Window):
         for c in self.bubble_box.get_children():
             self.bubble_box.remove(c)
         head = Gtk.Label()
-        head.set_markup(markup_escape(text))
+        head.set_markup(f'💀 <span font_size="110%">{markup_escape(text)}</span>')
         head.set_line_wrap(True)
-        head.get_style_context().add_class("qtext")
+        head.get_style_context().add_class("quip")
         head.set_size_request(self._bubble_width() - 24, -1)
         self.bubble_box.pack_start(head, False, False, 0)
         if note:
@@ -377,9 +404,12 @@ class Reaper(Gtk.Window):
 
         head = Gtk.Label()
         head.set_markup(
-            f'💀 {markup_escape(SUBJECT_NAMES[q.subject])} · '
-            f'{"●" * q.difficulty}{"○" * (3 - q.difficulty)} — '
-            f'{markup_escape(random.choice(ASK_LINES))}')
+            f'<span background="#9b1c1c" foreground="#ffffff" weight="bold"> '
+            f'{markup_escape(SUBJECT_NAMES[q.subject])} </span>'
+            f'  <span foreground="#ffd166">{"●" * q.difficulty}'
+            f'{"○" * (3 - q.difficulty)}</span>'
+            f'   <span foreground="#ff9db1" style="italic">'
+            f'{markup_escape(random.choice(ASK_LINES))}</span>')
         head.get_style_context().add_class("qhead")
         head.set_size_request(self._bubble_width() - 24, -1)
         self.bubble_box.pack_start(head, False, False, 0)
@@ -473,7 +503,8 @@ class Reaper(Gtk.Window):
         answer_text = q.options[q.answer] if q.options else " / ".join(q.open_answers)
         if correct:
             msg = Gtk.Label()
-            msg.set_markup(f'✔ {markup_escape(line(PRAISE))}')
+            msg.set_markup(
+                f'✔ <span size="110%">{markup_escape(line(PRAISE))}</span>')
             msg.get_style_context().add_class("fb-good")
             self.bubble_box.pack_start(msg, False, False, 0)
             if q.explanation:
@@ -487,7 +518,10 @@ class Reaper(Gtk.Window):
             why = "time's up — the scythe waited in vain" if timeout else \
                   ("surrendered" if reveal else "wrong")
             msg = Gtk.Label()
-            msg.set_markup(f'✘ {why}. Answer: {markup_escape(answer_text)}')
+            msg.set_markup(
+                f'✘ {why}! Answer: '
+                f'<span foreground="#ffd166" weight="bold">'
+                f'{markup_escape(answer_text)}</span>')
             msg.get_style_context().add_class("fb-bad")
             self.bubble_box.pack_start(msg, False, False, 0)
             if q.explanation:
@@ -502,7 +536,9 @@ class Reaper(Gtk.Window):
             new = st.complete_quota(self.state)
             st.save(self.state)
             done = Gtk.Label()
-            done.set_markup(f'💀 DAILY QUOTA COMPLETE — streak {new}🔥')
+            done.set_markup(
+                f'<span size="115%" weight="bold">💀 DAILY QUOTA COMPLETE'
+                f'</span> — <span foreground="#ffd166">streak {new}🔥</span>')
             done.get_style_context().add_class("fb-good")
             self.bubble_box.pack_start(done, False, False, 0)
             self.speak(line(FAREWELL))
