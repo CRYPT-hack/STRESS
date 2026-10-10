@@ -127,6 +127,46 @@ export STRESS_OLLAMA_MODEL=llama3  # default
 
 Without ollama, the bot just tells you to get back to drills.
 
+## LEARNER — the student agent on your screen 🧠
+
+New in 1.1.0: STRESS trains a *second* bot — a beginner student who learns DSA
+in C by working real LeetCode problems in a **visible browser window**, reading
+free resources when stuck, and then teaching you back.
+
+```bash
+# one-time setup
+pip install playwright
+python -m playwright install chromium
+ollama pull llama3   # the agent's brain (local only)
+```
+
+Run the interactive bot and:
+
+```
+/study             the agent opens leetcode.com on screen, reads the next
+                   NeetCode-150 problem, confesses what it doesn't know,
+                   reads NeetCode/GfG/Beej's Guide to fill gaps, writes C,
+                   types it into the editor and clicks Run — then stops so
+                   YOU press Submit (never auto-submitted)
+/study 3           three problems in one sitting
+/teach             the agent teaches you what it learned (from its journal)
+/quizme            the agent quizzes YOU on what it studied
+/learner           progress: problems done, concepts covered
+```
+
+Everything it learns is journaled to `journal/` as markdown — one file per
+problem plus notes/ digests per resource read, indexed in `journal/index.md`.
+`/ask` and the free-chat line stay available; set a cloud LLM with
+`STRESS_CLOUD_BASE_URL` + `STRESS_CLOUD_API_KEY` (OpenAI-compatible) if the
+local brain is too small.
+
+Module layout: `learner/curriculum.py` (NeetCode 150 + C warm-up cards) ·
+`learner/browser.py` (headed Playwright, persistent profile in `.lc-profile/`)
+· `learner/brain.py` (ollama primary, cloud fallback) · `learner/research.py`
+(curated free-resource registry: GfG, Beej, freeCodeCamp, NeetCode) ·
+`learner/journal.py` · `learner/chat.py` · `learner/session.py` (the /study
+driver).
+
 ## Add your own questions
 
 Open `questions.py` and append to the bank — one line each:
@@ -151,7 +191,8 @@ python3 -m unittest -v test_reaper    # sprite knockout, flip, reaper food
 Layout: `stress_bot.py` (REPL + commands) · `questions.py` (bank + cards) ·
 `grader.py` (answer grading) · `quiz.py` (selection) · `state.py` (persistence)
 · `enforcer.py` (the attitude) · `reaper.py` + `grim.sh` (desktop reaper) ·
-`make_sprites.py` + `assets/` (sprite pipeline).
+`make_sprites.py` + `assets/` (sprite pipeline) · `learner/` (the student
+agent, see LEARNER above).
 
 ## License
 

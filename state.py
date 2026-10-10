@@ -23,6 +23,12 @@ def default_state():
         "last_quota_date": None,
         "escape_attempts": 0,
         "days": {},  # date -> {asked, correct, quota_met, asked_ids, failed_ids}
+        "learner": {   # the browser-based student agent
+            "done_problems": [],   # leetcode slugs, roadmap order
+            "attempts": {},        # slug -> tries
+            "concepts": {},        # concept tag -> times used
+            "warmup_done": False,
+        },
     }
 
 
@@ -167,6 +173,24 @@ def complete_quota(state, today=None):
     state["best_streak"] = max(state["best_streak"], state["streak"])
     state["last_quota_date"] = today.isoformat()
     return state["streak"]
+
+
+def learner_section(state):
+    """Guaranteed-present learner dict, backward compatible."""
+    if not isinstance(state.get("learner"), dict):
+        state["learner"] = {}
+    l = state["learner"]
+    l.setdefault("done_problems", [])
+    l.setdefault("attempts", {})
+    l.setdefault("concepts", {})
+    l.setdefault("warmup_done", False)
+    return l
+
+
+def record_learner_problem(state, slug):
+    l = learner_section(state)
+    if slug not in l["done_problems"]:
+        l["done_problems"].append(slug)
 
 
 def totals(state):

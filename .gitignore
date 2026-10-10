@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 stress_state.json
 .DS_Store
+
+# learner runtime artifacts
+.lc-profile/
+journal/
+learner/__pycache__/

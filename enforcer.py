@@ -87,6 +87,17 @@ DESERTER = "Deserting via EOF? Coward. Progress saved; your conscience was not."
 
 INTERRUPT = "Ctrl+C won't save you. The quota remains."
 
+# learner-agent attitude (the student bot gets the drill too)
+LEARNER_STUDY = [
+    "Browser open. The student works. You watch. Suddenly the roles feel dangerous?",
+    "The child bot is reading now. Don't help it. That's how yours works too.",
+    "Watch your agent sweat over a linked list. Then remember /quizme exists.",
+]
+LEARNER_DONE = [
+    "The kid learned something today. Check /teach before it forgets plausibly.",
+    "Session over. Reading the journal beats pretending you already know it.",
+]
+
 
 def line(pool, **kwargs):
     return random.choice(pool).format(**kwargs)

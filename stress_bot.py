@@ -18,6 +18,14 @@ import subprocess
 import sys
 import textwrap
 
+try:
+    import learner.chat
+    import learner.session
+    LEARNER_OK = True
+except ImportError as _le:
+    LEARNER_OK = False
+    LEARNER_WARN = str(_le)
+
 import grader
 import quiz
 import state as st
@@ -29,7 +37,7 @@ from enforcer import (
 from questions import BANK, CARDS, SUBJECTS, SUBJECT_NAMES
 
 TAGLINE = "Study Trainer & Relentless Educational Supervision System"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 OLLAMA_MODEL = os.environ.get("STRESS_OLLAMA_MODEL", "llama3")
 MAX_RETRIES = 3
 
@@ -52,7 +60,12 @@ HELP = """\
 /ask <question>    chat with a local LLM (optional, needs ollama)
 /skip              skip the current question (counts against you)
 /reset             wipe all progress (asks for confirmation)
-/quit              leave — only allowed once today's quota is met"""
+/quit              leave — only allowed once today's quota is met
+/study [N]         learner agent solves next NeetCode problems in a visible
+                   browser (auto-runs; you press Submit) — needs ollama
+/teach [topic]     the agent teaches what it learned from its journal
+/quizme [topic]    the agent quizzes YOU on what it learned
+/learner           learner progress: problems done, concepts covered"""
 
 USE_COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 
@@ -241,6 +254,24 @@ def show_stats(state):
               f"{p['correct']}/{p['asked']} {_accuracy(p['correct'], p['asked'])}")
 
 
+def show_learner(state):
+    from learner import curriculum
+    lng = state.get("learner", {}) or {}
+    done = lng.get("done_problems", [])
+    n_done, n_total = curriculum.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({learner.chat.journal.problem_count()} entries)")
+    c = lng.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
 def show_streak(state):
     fire = "🔥" if state["streak"] > 0 else "💀"
     print(f"Streak: {state['streak']} day(s) {fire}   best: {state['best_streak']}")
@@ -366,6 +397,26 @@ def handle_command(state, raw):
             print("State wiped. Clean slate. Try to keep it that way.")
         else:
             print("Aborted. Your record lives on.")
+    elif cmd in ("/study", "/s"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        try:
+            n = max(1, min(5, int(arg) if arg else 1))
+        except ValueError:
+            n = 1
+        print(dim("Opening LeetCode in a visible browser. Watch, don't help."))
+        learner.session.study(n, state)
+        st.save(state)
+    elif cmd in ("/teach", "/t"):
+        if LEARNER_OK:
+            learner.chat.teach(arg)
+    elif cmd in ("/quizme", "/quizme"):
+        if LEARNER_OK:
+            learner.chat.quizme(arg)
+    elif cmd == "/learner":
+        if LEARNER_OK:
+            show_learner(state)
     elif cmd in ("/quit", "/exit", "/q"):
         if st.quota_met(state):
             print(green(line(FAREWELL)))
