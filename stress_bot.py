@@ -64,9 +64,11 @@ HELP = """\
 /quit              leave — only allowed once today's quota is met
 /study [N]         learner agent solves next NeetCode problems in a visible
                    browser (auto-runs; you press Submit) — needs ollama
-/fcc [N]           agent SOLVES freeCodeCamp HTML + JS challenges directly,
+/freecode [N]      agent SOLVES freeCodeCamp HTML + JS challenges directly,
                    two parallel browser sessions, auto-Submit on pass —
                    needs ollama; first run asks you to log in to FCC
+/fcc [N]           same as /freecode
+/free [N]          same as /freecode
 /teach [topic]     the agent teaches what it learned from its journal
 /quizme [topic]    the agent quizzes YOU on what it learned
 /learner           learner progress: problems done, concepts covered"""
@@ -417,7 +419,7 @@ def handle_command(state, raw):
         print(dim("Opening LeetCode in a visible browser. Watch, don't help."))
         learner.session.study(n, state)
         st.save(state)
-    elif cmd in ("/fcc", "/free"):
+    elif cmd in ("/freecode", "/fcc", "/free"):
         if not LEARNER_OK:
             print(f"Learner module failed to import: {LEARNER_WARN}")
             return

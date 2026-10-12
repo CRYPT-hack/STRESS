@@ -116,7 +116,32 @@ in beginner voice.
 | Learner state got weird | Delete `stress_state.json` — bot rebuilds; journal files remain and still teach. |
 | Update after I improve the code | `git pull` inside the STRESS folder. |
 
-## 8. Optional: stronger brain
+## 8. freeCodeCamp automation — `/freecode`
+
+The bot can also **directly solve** freeCodeCamp challenges (no learning
+narration) — HTML (Responsive Web Design) and JavaScript (algorithms)
+tracks, in two parallel browser sessions, auto-running tests and
+auto-Submitting when green.
+
+```powershell
+python stress_bot.py
+# then type:
+     /freecode          # 4 challenges, HTML + JS tracks in parallel
+     /freecode js 6     # JS track only, 6 challenges
+     /freecode html 3   # HTML (Responsive Web Design) track only, 3 challenges
+     # /fcc and /free are aliases for /freecode
+```
+
+- First run opens freeCodeCamp — sign in manually once. The session is
+  saved to `.fcc-profile/` and every later run is auto-logged-in.
+- Progress is saved in `stress_state.json` under `fcc.done` (slugs per
+  track) and shown by `/learner`.
+- Needs ollama (or a cloud key) — same brain as `/study`.
+- The bot clicks **Check Your Code** and **Submit** itself, but only
+  submits after tests genuinely pass; 3 failed attempts = skip and retry
+  next session (never a bogus submit).
+
+## 9. Optional: stronger brain
 
 Local llama3 is enough for Easy problems and honest confusion. For Medium+
 problems set a cloud fallback before starting the bot:

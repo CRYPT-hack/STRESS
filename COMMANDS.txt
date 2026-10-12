@@ -11,10 +11,12 @@ python stress_bot.py
 
 --- INSIDE THE BOT (type at the stress> prompt) -------------
 
-/fcc                FCC mode: 4 challenges, HTML + JS tracks in parallel
-/fcc 10             FCC mode: 10 challenges
-/fcc js 6           JavaScript track only
-/fcc html 3         HTML (Responsive Web Design) track only
+/freecode          FCC mode: 4 challenges, HTML + JS tracks in parallel
+/freecode 10       FCC mode: 10 challenges
+/freecode js 6     JavaScript track only
+/freecode html 3   HTML (Responsive Web Design) track only
+/fcc ...            same as /freecode
+/free ...          same as /freecode
 /study              LeetCode learner agent (you press Submit)
 /study 2            LeetCode, 2 problems
 /teach              agent teaches what it learned
