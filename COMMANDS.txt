@@ -1,0 +1,79 @@
+========================================
+STRESS — ALL COMMANDS (Windows PowerShell)
+Repo: C:\Users\Shobhit Rai\STRESS
+========================================
+
+--- START THE BOT -------------------------------------------
+
+cd C:\Users\Shobhit Rai\STRESS
+python stress_bot.py
+
+
+--- INSIDE THE BOT (type at the stress> prompt) -------------
+
+/fcc                FCC mode: 4 challenges, HTML + JS tracks in parallel
+/fcc 10             FCC mode: 10 challenges
+/fcc js 6           JavaScript track only
+/fcc html 3         HTML (Responsive Web Design) track only
+/study              LeetCode learner agent (you press Submit)
+/study 2            LeetCode, 2 problems
+/teach              agent teaches what it learned
+/quizme             agent quizzes YOU
+/learner            progress: LeetCode + freeCodeCamp counts
+/stats              lifetime quiz statistics
+/more 3             extra voluntary questions
+/motivation         encouragement
+/help               command list
+/quit               leave (only after daily quota is met)
+
+Note: first /fcc run opens freeCodeCamp — sign in manually once.
+Session is saved to .fcc-profile\ and every later run is auto-logged-in.
+
+
+--- HEADLESS ONE-LINERS (PowerShell, no bot prompt) ----------
+
+python stress_bot.py --check     status line (exit 1 = quota unmet)
+python stress_bot.py --name X    set name without the interview
+
+
+--- TESTS ---------------------------------------------------
+
+python -m unittest test_stress test_reaper     26 tests, expect: OK
+
+
+--- FCC LIVE TEST (solves 1 real challenge, headless) --------
+
+python _fcc_live_test.py
+
+
+--- FCC CURRICULUM (refresh cached challenge lists) ----------
+
+python learner/fcc_curriculum.py js html
+
+
+--- GRIM, THE REAPER (needs WSL/Linux — GTK3, not Windows) ---
+
+./grim.sh               roam + quiz every 4-9 min
+./grim.sh --roam-only   just roam and idle-quip (no quizzes)
+./grim.sh --test        rapid-fire demo
+./grim.sh --no-voice    silent
+
+
+--- SETUP (fresh machine only) -------------------------------
+
+pip install playwright
+python -m playwright install chromium
+pip install pillow                    (Grim sprite builder)
+winget install ollama
+ollama pull llama3
+git clone https://github.com/CRYPT-hack/STRESS.git
+cd STRESS
+
+
+--- GIT -----------------------------------------------------
+
+git status                 check for changes
+git add <file>             stage a file
+git commit -m "msg"        commit
+git push origin main       push to GitHub
+git pull                   pull latest from GitHub
