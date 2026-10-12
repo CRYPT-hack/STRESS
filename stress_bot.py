@@ -20,6 +20,7 @@ import textwrap
 
 try:
     import learner.chat
+    import learner.fcc_driver
     import learner.session
     LEARNER_OK = True
 except ImportError as _le:
@@ -63,6 +64,9 @@ HELP = """\
 /quit              leave — only allowed once today's quota is met
 /study [N]         learner agent solves next NeetCode problems in a visible
                    browser (auto-runs; you press Submit) — needs ollama
+/fcc [N]           agent SOLVES freeCodeCamp HTML + JS challenges directly,
+                   two parallel browser sessions, auto-Submit on pass —
+                   needs ollama; first run asks you to log in to FCC
 /teach [topic]     the agent teaches what it learned from its journal
 /quizme [topic]    the agent quizzes YOU on what it learned
 /learner           learner progress: problems done, concepts covered"""
@@ -270,6 +274,11 @@ def show_learner(state):
         top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
         print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
     print("  To train more          : /study [N]   To be taught: /teach")
+    fcc_done = state.get("fcc", {}).get("done", {})
+    js_n, html_n = len(fcc_done.get("js", [])), len(fcc_done.get("html", []))
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {js_n} · html {html_n}")
+    print("  To run FCC mode        : /fcc [N]   (default 4; 'js' or 'html' in arg limits track)")
 
 
 def show_streak(state):
@@ -408,6 +417,26 @@ def handle_command(state, raw):
         print(dim("Opening LeetCode in a visible browser. Watch, don't help."))
         learner.session.study(n, state)
         st.save(state)
+    elif cmd in ("/fcc", "/free"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        try:
+            n = max(1, min(20, int(arg) if arg else 4))
+        except ValueError:
+            n = 4
+        tracks = ("js", "html") if "html" in arg or "both" in arg else ("js", "html")
+        if arg.startswith("js"):
+            tracks = ("js",)
+        elif arg.startswith("html"):
+            tracks = ("html",)
+        print(dim(f"Opening freeCodeCamp. Tracks: {', '.join(tracks)}. "
+                  "Solve → Run the Tests → auto-Submit."))
+        learner.fcc_driver.run_session(state, n, tracks=tracks)
+        st.save(state)
+        fcc = state.get("fcc", {}).get("done", {})
+        print(green(f"  FCC done so far — js: {len(fcc.get('js', []))}, "
+                    f"html: {len(fcc.get('html', []))}"))
     elif cmd in ("/teach", "/t"):
         if LEARNER_OK:
             learner.chat.teach(arg)
@@ -454,7 +483,7 @@ def main_loop(state):
                 return
             continue
         print(dim("\n" + progress_bar(state)))
-        ans = ask_input(bold("stress> "))
+        ans = ask_input("what next — leetcode or freecodecamp? (/study | /fcc | /more | /help): ")
         if ans is None:
             continue
         ans = ans.strip()

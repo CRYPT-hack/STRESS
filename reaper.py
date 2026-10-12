@@ -195,7 +195,6 @@ class Reaper(Gtk.Window):
 
         self.resize(self.sw, self.sh)
         self.move(round(self.sx), round(self.sy))
-        self._W, self._H = self.sw, self.sh
         self.realize()
         self._shape_input()
         self.show_all()
@@ -203,8 +202,9 @@ class Reaper(Gtk.Window):
 
         GLib.timeout_add(TICK_MS, self._tick)
         GLib.timeout_add(int(random.uniform(600, 2000)), self._wake)
-        first = 8 if cfg.test else random.uniform(25, 60)
-        GLib.timeout_add_seconds(int(first), self._scheduled_quiz)
+        if not getattr(cfg, "roam_only", False):
+            first = 8 if cfg.test else random.uniform(25, 60)
+            GLib.timeout_add_seconds(int(first), self._scheduled_quiz)
         GLib.timeout_add_seconds(
             int(45 if cfg.test else random.uniform(120, 240)), self._idle_quip)
 
@@ -630,6 +630,8 @@ def main():
     p.add_argument("--test", action="store_true",
                    help="rapid-fire demo: quiz in 8s, then every ~30s")
     p.add_argument("--speed", type=float, default=1.0, help="roam speed multiplier")
+    p.add_argument("--roam-only", dest="roam_only", action="store_true",
+                   help="just roam and idle-quips; no scheduled quizzes")
     cfg = p.parse_args()
     cfg.min_gap *= 60  # minutes -> seconds
     cfg.max_gap *= 60

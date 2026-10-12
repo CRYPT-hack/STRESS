@@ -129,3 +129,43 @@ python stress_bot.py
 ```
 
 Nothing is sent anywhere unless you set those vars — ollama stays primary.
+
+---
+
+## freeCodeCamp mode (`/fcc`)
+
+The bot can also **directly solve** freeCodeCamp challenges (no learning
+narration) — HTML (Responsive Web Design) and JavaScript (algorithms)
+tracks, in two parallel browser sessions, auto-running tests and
+auto-Submitting when green.
+
+```powershell
+python stress_bot.py
+# then type:
+/fcc            # 4 challenges, HTML + JS tracks in parallel
+/fcc js 6       # JS track only, 6 challenges
+/fcc html 3     # HTML track only, 3 challenges
+```
+
+- **First run:** a browser window opens freeCodeCamp — sign in manually
+  once. The session is saved to `.fcc-profile/` and every later run is
+  already logged in.
+- Progress is saved in `stress_state.json` under `fcc.done` (slugs per
+  track) and shown by `/learner`.
+- Needs ollama (or a cloud key) — same brain as `/study`.
+- The bot clicks **Check Your Code** and **Submit** itself, but only
+  submits after tests genuinely pass; 3 failed attempts = skip and retry
+  next session (never a bogus submit).
+
+## Grim, the roaming reaper
+
+`reaper.py` needs GTK3 (`gi`), which does not exist on native Windows —
+run him under WSLg (or any Linux/X11 session):
+
+```bash
+./grim.sh                # roam + quiz every 4–9 min
+./grim.sh --roam-only    # just roam and idle-quip (while FCC works)
+```
+
+Native Windows fallback (not yet ported): Grim simply cannot start there;
+`python reaper.py` will fail with `ModuleNotFoundError: No module named 'gi'`.

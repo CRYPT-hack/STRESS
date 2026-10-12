@@ -100,6 +100,28 @@ def think(messages):
     return None, None
 
 
+def think_raw(user_text):
+    """Direct prompt → code reply, no student persona prepended.
+
+    Used by FCC mode where we want straight answers, not narrated
+    confusion. Same ollama → cloud fallback as think().
+    """
+    messages = [{"role": "user", "content": user_text}]
+    try:
+        reply = _ollama_chat(messages)
+        if reply:
+            return reply, "ollama"
+    except Exception:
+        pass
+    try:
+        reply = _cloud_chat(messages)
+        if reply:
+            return reply, "cloud"
+    except Exception:
+        pass
+    return None, None
+
+
 # ── convenience wrappers, each returns (text, provider) ────────────────────
 
 def understand(problem_text, prior_notes=""):
@@ -207,11 +229,16 @@ def quiz_me(tutor_context, topic_hint=""):
     ])
 
 
-def extract_code(reply):
-    """Pull the first ```c (or ``` fallback) fenced block out of a reply."""
+def extract_code(reply, fence_langs=("c", "C", "js", "javascript", "html", "")):
+    """Pull the first fenced code block out of a reply.
+
+    Knows C (LeetCode mode) and js/html/py (FCC mode); the "" tag
+    matches any bare ``` fence. Also tolerates models that put the
+    language word on its own line after the opening fence.
+    """
     if not reply:
         return None
-    for tag in ("c", "C", ""):
+    for tag in fence_langs:
         marker = "```" + tag
         idx = reply.find(marker)
         if idx == -1:
@@ -222,5 +249,10 @@ def extract_code(reply):
         end = reply.find("```", start + 1)
         if end == -1:
             continue
-        return reply[start + 1:end].rstrip() + "\n"
+        code = reply[start + 1:end].rstrip() + "\n"
+        first = code.split("\n", 1)[0].strip().lower().rstrip(":")
+        if first in ("js", "javascript", "html", "css", "python", "py",
+                     "c", "json") and "\n" in code:
+            code = code.split("\n", 1)[1]
+        return code
     return None

@@ -7,3 +7,7 @@ stress_state.json
 .lc-profile/
 journal/
 learner/__pycache__/
+
+# fcc runtime artifacts
+.fcc-profile/
+.fcc-curriculum/
