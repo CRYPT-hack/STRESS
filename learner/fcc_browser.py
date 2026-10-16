@@ -164,13 +164,13 @@ class FCCBrowser:
                     "button:has-text('Run')", "[data-cy='run-tests-button']",
                     ".btn-cta"):
             try:
-                page.locator(sel).first.click(timeout=5000)
+                page.locator(sel).first.click(timeout=2500)
                 return True
             except Exception:
                 continue
         # fall back: first enabled button with a cta class + play icon
         try:
-            page.locator("button.btn-cta").first.click(timeout=4000)
+            page.locator("button.btn-cta").first.click(timeout=2000)
             return True
         except Exception:
             return False
@@ -184,9 +184,9 @@ class FCCBrowser:
                     "button:has-text('Submit')", "[data-cy='submit-button']"):
             try:
                 btn = page.locator(sel).first
-                if btn.is_visible(timeout=2500):
-                    btn.click(timeout=4000)
-                    page.wait_for_timeout(2500)
+                if btn.is_visible(timeout=1200):
+                    btn.click(timeout=3000)
+                    page.wait_for_timeout(700)
                     return True
             except Exception:
                 continue
@@ -207,7 +207,7 @@ class FCCBrowser:
                 n = page.locator(".test-result").count()
                 if n:
                     results = [page.locator(".test-result").nth(i)
-                               .inner_text(timeout=1500).strip()
+                               .inner_text(timeout=900).strip()
                                for i in range(n)]
                     if all(r.startswith("Passed") for r in results):
                         return True, ""
@@ -219,11 +219,11 @@ class FCCBrowser:
             # success shortcut: FCC shows the Submit button only on pass
             try:
                 if page.locator("button:has-text('Submit')").first.is_visible(
-                        timeout=1200):
+                        timeout=600):
                     return True, ""
             except Exception:
                 pass
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(700)
         return False, fail_text or "timed out waiting for tests to pass"
 
     # ── misc ────────────────────────────────────────────────────────────
