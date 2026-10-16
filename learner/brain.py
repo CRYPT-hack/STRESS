@@ -19,6 +19,14 @@ CLOUD_MODEL = os.environ.get("STRESS_CLOUD_MODEL", "gpt-4o-mini")
 
 TIMEOUT = 180
 
+# keep the model resident between calls - otherwise every FCC step pays
+# a fresh model-load cost (seconds to tens of seconds each time)
+_OLLAMA_KEEP_ALIVE = os.environ.get("STRESS_OLLAMA_KEEP_ALIVE", "30m")
+
+# max new tokens for code-answer calls - stops the model rambling
+# explanations after the code block is done
+_CODE_NUM_PREDICT = int(os.environ.get("STRESS_CODE_NUM_PREDICT", "2000"))
+
 
 def _verse(persona):
     return persona.startswith("strict")
@@ -40,15 +48,18 @@ PERSONA_STRICT = (
 )
 
 
-def _ollama_chat(messages):
-    body = json.dumps({
+def _ollama_chat(messages, num_predict=None, keep_alive=None):
+    body = {
         "model": OLLAMA_MODEL,
         "messages": messages,
         "stream": False,
-    }).encode()
+        "keep_alive": keep_alive or _OLLAMA_KEEP_ALIVE,
+    }
+    if num_predict is not None:
+        body["options"] = {"num_predict": num_predict}
     req = urllib.request.Request(
         OLLAMA_HOST + "/api/chat",
-        data=body,
+        data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
@@ -108,7 +119,7 @@ def think_raw(user_text):
     """
     messages = [{"role": "user", "content": user_text}]
     try:
-        reply = _ollama_chat(messages)
+        reply = _ollama_chat(messages, num_predict=_CODE_NUM_PREDICT)
         if reply:
             return reply, "ollama"
     except Exception:
