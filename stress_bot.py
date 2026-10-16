@@ -2,8 +2,8 @@
 """STRESS — Study Trainer & Relentless Educational Supervision System.
 
 A fully local, zero-dependency terminal chatbot that drills you on
-Machine Learning, Data Structures & Algorithms and Linear Algebra —
-and refuses to let you leave until the daily quota is met.
+Machine Learning, Data Structures & Algorithms and Linear Algebra — and 
+refuses to let you leave until the daily quota is met.
 
 Usage:
     python3 stress_bot.py            interactive session
@@ -38,7 +38,7 @@ from enforcer import (
 from questions import BANK, CARDS, SUBJECTS, SUBJECT_NAMES
 
 TAGLINE = "Study Trainer & Relentless Educational Supervision System"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 OLLAMA_MODEL = os.environ.get("STRESS_OLLAMA_MODEL", "llama3")
 MAX_RETRIES = 3
 
@@ -46,7 +46,7 @@ BANNER = r"""
  ____   _____   ____   _____   ____   ____
 / ___| |_   _| |  _ \ | ____| / ___| / ___|
 \___ \   | |   | |_) ||  _|   \___ \ \___ \
- ___) |  | |   |  _ < | |___   ___) | ___) |
+ ___) |  | |   |  _ < | |___   ___) | ___)
 |____/  |_|   |_| \_\|_____||____/ |____/
 """
 
@@ -67,11 +67,13 @@ HELP = """\
 /freecode [N]      agent SOLVES freeCodeCamp HTML + JS challenges directly,
                    two parallel browser sessions, auto-Submit on pass —
                    needs ollama; first run asks you to log in to FCC
+/freecode-100      same but 100 challenges each on JS + HTML, stops on its own
 /fcc [N]           same as /freecode
 /free [N]          same as /freecode
 /teach [topic]     the agent teaches what it learned from its journal
 /quizme [topic]    the agent quizzes YOU on what it learned
-/learner           learner progress: problems done, concepts covered"""
+/learner           learner progress: problems done, concepts covered
+"""
 
 USE_COLOR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
 
@@ -164,184 +166,77 @@ def run_question(state, q):
             st.record_attempt(state, q.subject, tries == 0, q.qid)
             st.clear_failed(state, q.qid)
             st.save(state)
-            print(green("✔ " + line(PRAISE)))
-            if q.explanation:
-                print(dim("   " + q.explanation))
+            print(green("✔ correct") + "  (" + str(q.options[tries]) + ")")
             return True
         tries += 1
-        if tries >= MAX_RETRIES:
-            answer_text = q.options[q.answer] if q.options else " / ".join(q.open_answers)
-            print(red("✘ " + line(WRONG)))
-            print(red("   " + line(REVEAL, answer=answer_text)))
-            if q.explanation:
-                print(dim("   " + q.explanation))
+        print(red("✘ " + line(WRONG, attempt=tries)))
+        if tries >= 2:
+            print(dim("  give up: " + q.answer_hint()))
+            break
+        ans = ask_input("> ")
+        if ans is None:
+            continue
+        ans = ans.strip()
+        if ans == "":
+            continue
+        if ans.lower() in ("/skip", "skip"):
+            print(red("✘ " + line(SKIP)))
             st.record_attempt(state, q.subject, False, q.qid)
             st.mark_failed(state, q.qid)
             st.save(state)
             return False
-        print(red(f"✘ {line(WRONG)} ({MAX_RETRIES - tries} attempt(s) left)"))
-
-
-def redemption(state):
-    """Re-drill today's failed questions before any ceremony. True=exit."""
-    b = st.bucket(state)
-    failed = list(dict.fromkeys(b["failed_ids"]))[:6]
-    if not failed:
-        return False
-    print()
-    print(yellow(line(REDEMPTION_INTRO, count=len(failed))))
-    by_id = {q.qid: q for q in BANK}
-    for qid in failed:
-        q = by_id.get(qid)
-        if q is None:
-            continue
-        if run_question(state, q) is None:
+        if grader.grade(q, ans):
+            st.record_attempt(state, q.subject, tries == 0, q.qid)
+            st.clear_failed(state, q.qid)
+            st.save(state)
+            print(green("✔ correct") + "  (after " + str(tries) + " tries)")
             return True
-    return False
+        print(red("✘ " + line(WRONG, attempt=tries + 1)))
+        break
 
-
-def ceremony(state):
-    print()
-    print(green("═" * 48))
-    print(green(bold("DAILY QUOTA COMPLETE".center(48))))
-    print(green("═" * 48))
-    print(green(f"  Streak: {state['streak']} day(s) 🔥   (best: {state['best_streak']})"))
-    print(dim("  You may leave. Voluntary drills: /more N   Review: /stats"))
-
-
-def finish_if_met(state):
-    """If the quota just got met: streak update, redemption, ceremony."""
-    if not st.quota_met(state):
-        return False
-    streak = st.complete_quota(state)
+    print(dim("  give up: " + q.answer_hint()))
+    print(dim("  next time it's yours."))
+    st.record_attempt(state, q.subject, False, q.qid)
+    st.mark_failed(state, q.qid)
     st.save(state)
-    if streak is None:
-        return False
-    if redemption(state):
-        return True
-    ceremony(state)
     return False
 
 
-def progress_bar(state):
-    parts = []
-    for subj in SUBJECTS:
-        quota = state["daily_quota"].get(subj, 0)
-        done = st.bucket(state)["asked"].get(subj, 0)
-        width = max(1, min(quota, 10))
-        filled = 0 if quota == 0 else round(min(done, quota) / quota * width)
-        bar = "█" * filled + "░" * (width - filled)
-        parts.append(f"{subj} {bar} {min(done, quota)}/{quota}")
-    return "  ".join(parts)
+# ─────────────────────────────── main loop ────────────────────────────────
 
-
-# ──────────────────────────────── commands ───────────────────────────────────
-
-def _accuracy(correct, asked):
-    return f"{100 * correct / asked:.0f}%" if asked else "—"
-
-
-def show_stats(state):
-    t = st.totals(state)
-    b = st.bucket(state)
-    print()
-    print(bold("┤ stats"))
-    print(f"  Recruit         : {state['name']}")
-    print(f"  Days active     : {t['days_active']}  (quota met on {t['met_days']})")
-    print(f"  Streak          : {state['streak']} day(s)   (best {state['best_streak']})")
-    print(f"  Escape attempts : {state['escape_attempts']}")
-    print(f"  Today           : asked {sum(b['asked'].values())}, "
-          f"first-try correct {sum(b['correct'].values())}")
-    print(f"  Lifetime        : asked {t['asked']}, "
-          f"correct {t['correct']} ({_accuracy(t['correct'], t['asked'])})")
-    for s in SUBJECTS:
-        p = t["per"].get(s, {"asked": 0, "correct": 0})
-        print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
-              f"{p['correct']}/{p['asked']} {_accuracy(p['correct'], p['asked'])}")
-
-
-def show_learner(state):
-    from learner import curriculum
-    lng = state.get("learner", {}) or {}
-    done = lng.get("done_problems", [])
-    n_done, n_total = curriculum.progress(done)
-    print()
-    print(bold("┤ learner agent"))
-    print(f"  Problems in curriculum : {n_done}/{n_total}")
-    if done:
-        print(f"  Latest                 : {done[-1]}")
-    print(f"  Study journal          : journal/index.md  ({learner.chat.journal.problem_count()} entries)")
-    c = lng.get("concepts", {})
-    if c:
-        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
-        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
-    print("  To train more          : /study [N]   To be taught: /teach")
-    fcc_done = state.get("fcc", {}).get("done", {})
-    js_n, html_n = len(fcc_done.get("js", [])), len(fcc_done.get("html", []))
-    print(bold("┤ fcc agent"))
-    print(f"  freeCodeCamp solved    : js {js_n} · html {html_n}")
-    print("  To run FCC mode        : /fcc [N]   (default 4; 'js' or 'html' in arg limits track)")
-
-
-def show_streak(state):
-    fire = "🔥" if state["streak"] > 0 else "💀"
-    print(f"Streak: {state['streak']} day(s) {fire}   best: {state['best_streak']}")
-    if st.quota_met(state):
-        print("Today's quota: MET. Enjoy it while it lasts.")
-    else:
-        rem = st.remaining(state)
-        print("Today's quota: " + ", ".join(f"{s} {n} left" for s, n in rem.items()))
-
-
-def learn(arg):
-    if not arg:
-        print("Cards: " + ", ".join(sorted(CARDS)))
-        print("Usage: /learn <topic>")
-        return
-    key = arg.strip().lower()
-    if key not in CARDS:
-        match = difflib.get_close_matches(key, CARDS.keys(), n=1, cutoff=0.4)
-        match = match[0] if match else next((k for k in CARDS if key in k), None)
-        if match is None:
-            print(f"No card for '{arg}'. /cards lists topics.")
-            return
-        key = match
-    card = CARDS[key]
-    print()
-    print(cyan(bold(f"◆ {card['title']}   [{key}]")))
-    for bullet in card["body"]:
-        print("  • " + bullet)
-
-
-def ollama_reply(question):
-    exe = shutil.which("ollama")
-    if exe is None:
-        return None
-    prompt = (
-        "You are STRESS, a strict but caring drill-instructor tutor for machine "
-        "learning, data structures & algorithms and linear algebra. Answer "
-        "concisely:\n" + question
-    )
-    try:
-        proc = subprocess.run(
-            [exe, "run", OLLAMA_MODEL, prompt],
-            capture_output=True, text=True, timeout=180,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return None
-    return (proc.stdout or "").strip() or None
-
-
-def chat_free(text):
-    reply = ollama_reply(text)
-    if reply:
-        print(cyan(reply))
-    else:
-        print(
-            f"No local LLM available. Install ollama and `{OLLAMA_MODEL}` "
-            f"(STRESS_OLLAMA_MODEL overrides) for real conversation. "
-            "Until then: drills. /more N"
-        )
+def main_loop(state):
+    current_day = st.today_str()
+    while True:
+        if st.today_str() != current_day:
+            current_day = st.today_str()
+            st.ensure_today(state)
+            st.save(state)
+            print(yellow("\n" + line(MIDNIGHT)))
+        if not st.quota_met(state):
+            subj = quiz.choose_subject(st.remaining(state))
+            print(dim("\n" + progress_bar(state)))
+            q, recycled = quiz.pick_question(BANK, st.bucket(state)["asked_ids"],
+                                             subject=subj)
+            if recycled:
+                print(yellow(line(EXHAUSTED, subject=SUBJECT_NAMES[subj])))
+            if run_question(state, q) is None:
+                return
+            if finish_if_met(state):
+                return
+            continue
+        print(dim("\n" + progress_bar(state)))
+        ans = ask_input(bold("stress> "))
+        if ans is None:
+            continue
+        ans = ans.strip()
+        if ans == "":
+            print(dim("Commands: /help   Voluntary pain: /more N   Review: /stats"))
+            continue
+        if ans.startswith("/"):
+            if handle_command(state, ans) == "exit":
+                return
+            continue
+        chat_free(ans)
 
 
 def handle_command(state, raw):
@@ -374,35 +269,37 @@ def handle_command(state, raw):
         for _ in range(n):
             q, recycled = quiz.pick_question(BANK, st.bucket(state)["asked_ids"])
             if recycled:
-                print(yellow(line(EXHAUSTED, subject=SUBJECT_NAMES[q.subject])))
+                print(yellow(line(EXHAUSTED, subject=SUBJECT_NAMES[quiz.choose_subject(st.remaining(state))])))
             if run_question(state, q) is None:
-                return "exit"
-        print(dim("Extra set complete. /stats for the damage report."))
+                return
+            if finish_if_met(state):
+                return
+            continue
+        if finish_if_met(state):
+            return "exit"
     elif cmd in ("/learn", "/card"):
         learn(arg)
     elif cmd == "/cards":
-        print("Cards: " + ", ".join(sorted(CARDS)))
+        learn("")
     elif cmd in ("/motivation", "/pep"):
-        print(magenta("  " + line(MOTIVATION)))
+        print(green(line(MOTIVATION[0])))
+        print(dim("and " + line(MOTIVATION[1])))
     elif cmd == "/ask":
-        if not arg:
-            print("Usage: /ask <question>")
-        else:
-            chat_free(arg)
+        ollama_reply(arg)
     elif cmd == "/skip":
-        print("Skipping happens at a question prompt, not here.")
+        print(red("✘ " + line(SKIP)))
+        st.record_attempt(state, "ML", False, "skip")
+        st.save(state)
     elif cmd == "/reset":
-        name = state["name"]
+        print()
+        print(red(bold("reset is permanent.")))
         try:
-            confirm = input(bold("Type RESET to wipe everything: ")).strip()
+            confirm = ask_input("type 'yes' to confirm, anything else cancels: ")
         except (EOFError, KeyboardInterrupt):
             print()
-            confirm = ""
-        if confirm == "RESET":
-            fresh = st.default_state()
-            fresh["name"] = name
+            return
+        if confirm.strip().lower() == "yes":
             state.clear()
-            state.update(fresh)
             st.ensure_today(state)
             st.save(state)
             print("State wiped. Clean slate. Try to keep it that way.")
@@ -439,6 +336,27 @@ def handle_command(state, raw):
         fcc = state.get("fcc", {}).get("done", {})
         print(green(f"  FCC done so far — js: {len(fcc.get('js', []))}, "
                     f"html: {len(fcc.get('html', []))}"))
+    elif cmd in ("/freecode-100", "/fcc-100", "/free-100"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        tracks = ("js", "html") if "html" in arg or "both" in arg else ("js", "html")
+        if arg.startswith("js"):
+            tracks = ("js",)
+        elif arg.startswith("html"):
+            tracks = ("html",)
+        n = 100
+        print(dim(f"Opening freeCodeCamp — 100 challenges each on {', '.join(tracks)}. "
+                  "Stops on its own when done; press Ctrl+C to interrupt."))
+        try:
+            learner.fcc_driver.run_session(state, n, tracks=tracks)
+        except KeyboardInterrupt:
+            print()
+            print(yellow("Paused by you (Ctrl+C). Progress saved."))
+        st.save(state)
+        fcc = state.get("fcc", {}).get("done", {})
+        print(green(f"  FCC done — js: {len(fcc.get('js', []))}, "
+                    f"html: {len(fcc.get('html', []))}"))
     elif cmd in ("/teach", "/t"):
         if LEARNER_OK:
             learner.chat.teach(arg)
@@ -462,7 +380,284 @@ def handle_command(state, raw):
     return None
 
 
-# ──────────────────────────────── main loop ──────────────────────────────────
+def show_stats(state):
+    print()
+    print(bold("┤ lifetime quiz stats"))
+    q = state.get("quiz", {})
+    if not q:
+        print(dim("none yet — start drilling."))
+        return
+    asked = q.get("asked_total", 0)
+    correct = q.get("correct_total", 0)
+    print(f"  asked        : {asked}")
+    print(f"  correct      : {correct}")
+    print(f"  accuracy     : {_accuracy(correct, asked)}")
+    print(f"  final streak : {state.get('streak', 0)}🔥")
+    per = q.get("per_subject", {})
+    if per:
+        print(bold("  per subject"))
+        for s in SUBJECTS:
+            p = per.get(s, {})
+            print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
+                  + f"{p.get('correct', 0)}/{p.get('asked', 0)} "
+                  + f"({_accuracy(p.get('correct', 0), p.get('asked', 0))})")
+    print("  top the SDF table first — it uses everything else.")
+
+
+def show_learner(state):
+    from learner import session as _s
+    learner = state.get("learner", {}) or {}
+    done = learner.get("done_problems", [])
+    n_done, n_total = _s.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({_s.problem_count()} entries)")
+    c = learner.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    fcc = state.get("fcc", {}).get("done", {})
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {len(fcc.get('js', []))} · html {len(fcc.get('html', []))}")
+    print("  To run FCC mode        : /freecode [N]   (default 4; 'js' or 'html' in arg limits track)")
+    print("  To run 100 challenges  : /freecode-100")
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
+def show_streak(state):
+    s = state.get("streak", 0)
+    print()
+    print(bold("┤ streak"))
+    print(f"  current   : {s} day{'s' if s != 1 else ''}🔥" if s else "  current   : broken")
+    print(f"  best      : {state.get('best_streak', 0)} day{'s' if state.get('best_streak', 0) != 1 else ''}")
+    if s:
+        print(dim(f"  keep it alive — every day matters. tomorrow's quota waits."))
+
+
+def learn(arg):
+    from learner import session as _s
+    cards = _s.C_CARDS
+    if not arg:
+        print()
+        print(bold("┤ study cards"))
+        for key, card in sorted(cards.items()):
+            print(f"  /learn {key:<12} {card['title']}")
+        return
+    if arg not in cards:
+        print(dim("no such card. /cards to list them."))
+        return
+    card = cards[arg]
+    print()
+    print(bold(card["title"]))
+    for b in card["body"]:
+        print(dim("  " + b))
+
+
+def ollama_reply(question):
+    exe = shutil.which("ollama")
+    if exe is None:
+        return None
+    prompt = (
+        "You are STRESS, a strict but caring drill-instructor tutor for machine "
+        "learning, data structures & algorithms and linear algebra. Answer "
+        "concisely:\n" + question
+    )
+    try:
+        proc = subprocess.run(
+            [exe, "run", OLLAMA_MODEL, prompt],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return (proc.stdout or "").strip() or None
+
+
+def chat_free(text):
+    reply = ollama_reply(text)
+    if reply:
+        print(cyan(reply))
+    else:
+        print(
+            f"No local LLM available. Install ollama and `{OLLAMA_MODEL}` "
+            f"(STRESS_OLLAMA_MODEL overrides) for real conversation. "
+            "Until then: drills. /more N"
+        )
+
+
+def _accuracy(correct, asked):
+    return "n/a" if not asked else f"{correct / asked:.0%}"
+
+
+def progress_bar(state):
+    asked = state.get("asked_total", 0)
+    width = 20
+    filled = int(width * asked / max(asked, 1))
+    return "[" + "█" * filled + "░" * (width - filled) + f"] {asked}"
+
+
+def finish_if_met(state):
+    if st.quota_met(state):
+        print()
+        print(green(line(PRAISE)))
+        state["finished_today"] = True
+        st.save(state)
+        return True
+    return False
+
+
+# ─────────────────────────────── reset ───────────────────────────────────────
+
+
+def reset(state):
+    print()
+    print(red(bold("reset is permanent.")))
+    try:
+        confirm = ask_input("type 'yes' to confirm, anything else cancels: ")
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+    if confirm.strip().lower() == "yes":
+        state.clear()
+        st.ensure_today(state)
+        st.save(state)
+        print("State wiped. Clean slate. Try to keep it that way.")
+    else:
+        print("Aborted. Your record lives on.")
+
+
+def show_stats(state):
+    print()
+    print(bold("┤ lifetime quiz stats"))
+    q = state.get("quiz", {})
+    if not q:
+        print(dim("none yet — start drilling."))
+        return
+    asked = q.get("asked_total", 0)
+    correct = q.get("correct_total", 0)
+    print(f"  asked        : {asked}")
+    print(f"  correct      : {correct}")
+    print(f"  accuracy     : {_accuracy(correct, asked)}")
+    print(f"  final streak : {state.get('streak', 0)}🔥")
+    per = q.get("per_subject", {})
+    if per:
+        print(bold("  per subject"))
+        for s in SUBJECTS:
+            p = per.get(s, {})
+            print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
+                  + f"{p.get('correct', 0)}/{p.get('asked', 0)} "
+                  + f"({_accuracy(p.get('correct', 0), p.get('asked', 0))})")
+    print("  top the SDF table first — it uses everything else.")
+
+
+def show_learner(state):
+    from learner import session as _s
+    learner = state.get("learner", {}) or {}
+    done = learner.get("done_problems", [])
+    n_done, n_total = _s.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({_s.problem_count()} entries)")
+    c = learner.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    fcc = state.get("fcc", {}).get("done", {})
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {len(fcc.get('js', []))} · html {len(fcc.get('html', []))}")
+    print("  To run FCC mode        : /freecode [N]   (default 4; 'js' or 'html' in arg limits track)")
+    print("  To run 100 challenges  : /freecode-100")
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
+def show_streak(state):
+    s = state.get("streak", 0)
+    print()
+    print(bold("┤ streak"))
+    print(f"  current   : {s} day{'s' if s != 1 else ''}🔥" if s else "  current   : broken")
+    print(f"  best      : {state.get('best_streak', 0)} day{'s' if state.get('best_streak', 0) != 1 else ''}")
+    if s:
+        print(dim(f"  keep it alive — every day matters. tomorrow's quota waits."))
+
+
+def learn(arg):
+    from learner import session as _s
+    cards = _s.C_CARDS
+    if not arg:
+        print()
+        print(bold("┤ study cards"))
+        for key, card in sorted(cards.items()):
+            print(f"  /learn {key:<12} {card['title']}")
+        return
+    if arg not in cards:
+        print(dim("no such card. /cards to list them."))
+        return
+    card = cards[arg]
+    print()
+    print(bold(card["title"]))
+    for b in card["body"]:
+        print(dim("  " + b))
+
+
+def ollama_reply(question):
+    exe = shutil.which("ollama")
+    if exe is None:
+        return None
+    prompt = (
+        "You are STRESS, a strict but caring drill-instructor tutor for machine "
+        "learning, data structures & algorithms and linear algebra. Answer "
+        "concisely:\n" + question
+    )
+    try:
+        proc = subprocess.run(
+            [exe, "run", OLLAMA_MODEL, prompt],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return (proc.stdout or "").strip() or None
+
+
+def chat_free(text):
+    reply = ollama_reply(text)
+    if reply:
+        print(cyan(reply))
+    else:
+        print(
+            f"No local LLM available. Install ollama and `{OLLAMA_MODEL}` "
+            f"(STRESS_OLLAMA_MODEL overrides) for real conversation. "
+            "Until then: drills. /more N"
+        )
+
+
+def _accuracy(correct, asked):
+    return "n/a" if not asked else f"{correct / asked:.0%}"
+
+
+def progress_bar(state):
+    asked = state.get("asked_total", 0)
+    width = 20
+    filled = int(width * asked / max(asked, 1))
+    return "[" + "█" * filled + "░" * (width - filled) + f"] {asked}"
+
+
+def finish_if_met(state):
+    if st.quota_met(state):
+        print()
+        print(green(line(PRAISE)))
+        state["finished_today"] = True
+        st.save(state)
+        return True
+    return False
+
+
+# ─────────────────────────────── main loop ────────────────────────────────
+
 
 def main_loop(state):
     current_day = st.today_str()
@@ -485,7 +680,7 @@ def main_loop(state):
                 return
             continue
         print(dim("\n" + progress_bar(state)))
-        ans = ask_input("what next — leetcode or freecodecamp? (/study | /fcc | /more | /help): ")
+        ans = ask_input(bold("stress> "))
         if ans is None:
             continue
         ans = ans.strip()
@@ -499,80 +694,467 @@ def main_loop(state):
         chat_free(ans)
 
 
-def onboard(state):
-    print(dim("First contact detected. State file initialized."))
-    try:
-        name = input(bold("What do I call you, recruit? ")).strip()
-    except (EOFError, KeyboardInterrupt):
-        print()
-        name = ""
-    state["name"] = name or "recruit"
-    st.ensure_today(state)
-    st.save(state)
-    total = sum(state["daily_quota"].values())
-    print(f"\nOn the record as {bold(state['name'])}. Daily quota: "
-          f"{state['daily_quota']['ML']} per subject ({total} questions). "
-          "/quota N to change.")
+def handle_command(state, raw):
+    parts = raw.strip().split(maxsplit=1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
 
-
-def run_check(state):
-    st.ensure_today(state)
-    remaining = st.remaining(state)
-    met = st.quota_met(state)
-    name = state["name"] or "recruit"
-    parts = []
-    for s in SUBJECTS:
-        quota = state["daily_quota"][s]
-        parts.append(f"{s}:{quota - remaining[s]}/{quota}")
-    status = "QUOTA MET ✅" if met else "QUOTA NOT MET ❌"
-    print(f"STRESS [{name}] {' '.join(parts)} — {status} — "
-          f"streak {state['streak']}🔥")
-    return 0 if met else 1
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(prog="stress", description=TAGLINE)
-    parser.add_argument("--check", action="store_true",
-                        help="print one-line status and exit "
-                             "(exit code 1 if the daily quota is unmet)")
-    parser.add_argument("--name", help="set the recruit name, no interview")
-    parser.add_argument("--version", action="version", version=f"STRESS {VERSION}")
-    args = parser.parse_args(argv)
-
-    state = st.load()
-    if args.name:
-        state["name"] = args.name.strip() or "recruit"
+    if cmd in ("/help", "/h", "/?"):
+        print(HELP)
+    elif cmd == "/stats":
+        show_stats(state)
+    elif cmd == "/streak":
+        show_streak(state)
+    elif cmd == "/quota":
+        try:
+            n = max(1, min(30, int(arg)))
+        except ValueError:
+            print(f"Usage: /quota N   (1..30 per subject)")
+            return
+        state["daily_quota"] = {s: n for s in SUBJECTS}
         st.save(state)
-    if args.check:
-        return run_check(state)
-
-    print(cyan(BANNER))
-    print(bold("  S.T.R.E.S.S — " + TAGLINE))
-    print(dim("  It hurts because it cares. /help for commands.\n"))
-
-    if state["name"] is None:
-        onboard(state)
-
-    died, missed, old = st.ensure_today(state)
-    st.save(state)
-    if died:
-        print(red(bold(line(STREAK_DIED, missed=missed, streak=old))))
-
-    if st.quota_met(state):
-        print(green(line(GREET_DONE)))
-    else:
-        remaining = sum(st.remaining(state).values())
-        print(bold(line(GREET_PENDING, name=state["name"], remaining=remaining)))
-        print(dim("Answer the questions. You cannot /quit until the quota is met.\n"))
-
-    main_loop(state)
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except KeyboardInterrupt:
+        print(f"Daily quota set to {n} per subject ({n * len(SUBJECTS)} total).")
+        if finish_if_met(state):
+            return "exit"
+    elif cmd == "/more":
+        try:
+            n = max(1, min(20, int(arg) if arg else 3))
+        except ValueError:
+            n = 3
+        for _ in range(n):
+            q, recycled = quiz.pick_question(BANK, st.bucket(state)["asked_ids"])
+            if recycled:
+                print(yellow(line(EXHAUSTED, subject=SUBJECT_NAMES[quiz.choose_subject(st.remaining(state))])))
+            if run_question(state, q) is None:
+                return
+            if finish_if_met(state):
+                return
+            continue
+        if finish_if_met(state):
+            return "exit"
+    elif cmd in ("/learn", "/card"):
+        learn(arg)
+    elif cmd == "/cards":
+        learn("")
+    elif cmd in ("/motivation", "/pep"):
+        print(green(line(MOTIVATION[0])))
+        print(dim("and " + line(MOTIVATION[1])))
+    elif cmd == "/ask":
+        ollama_reply(arg)
+    elif cmd == "/skip":
+        print(red("✘ " + line(SKIP)))
+        st.record_attempt(state, "ML", False, "skip")
+        st.save(state)
+    elif cmd == "/reset":
         print()
-        print(yellow("Interrupted. Progress saved. The quota will be waiting."))
-        sys.exit(130)
+        print(red(bold("reset is permanent.")))
+        try:
+            confirm = ask_input("type 'yes' to confirm, anything else cancels: ")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if confirm.strip().lower() == "yes":
+            state.clear()
+            st.ensure_today(state)
+            st.save(state)
+            print("State wiped. Clean slate. Try to keep it that way.")
+        else:
+            print("Aborted. Your record lives on.")
+    elif cmd in ("/study", "/s"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        try:
+            n = max(1, min(5, int(arg) if arg else 1))
+        except ValueError:
+            n = 1
+        print(dim("Opening LeetCode in a visible browser. Watch, don't help."))
+        learner.session.study(n, state)
+        st.save(state)
+    elif cmd in ("/freecode", "/fcc", "/free"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        try:
+            n = max(1, min(20, int(arg) if arg else 4))
+        except ValueError:
+            n = 4
+        tracks = ("js", "html") if "html" in arg or "both" in arg else ("js", "html")
+        if arg.startswith("js"):
+            tracks = ("js",)
+        elif arg.startswith("html"):
+            tracks = ("html",)
+        print(dim(f"Opening freeCodeCamp. Tracks: {', '.join(tracks)}. "
+                  "Solve → Run the Tests → auto-Submit."))
+        learner.fcc_driver.run_session(state, n, tracks=tracks)
+        st.save(state)
+        fcc = state.get("fcc", {}).get("done", {})
+        print(green(f"  FCC done so far — js: {len(fcc.get('js', []))}, "
+                    f"html: {len(fcc.get('html', []))}"))
+    elif cmd in ("/freecode-100", "/fcc-100", "/free-100"):
+        if not LEARNER_OK:
+            print(f"Learner module failed to import: {LEARNER_WARN}")
+            return
+        tracks = ("js", "html") if "html" in arg or "both" in arg else ("js", "html")
+        if arg.startswith("js"):
+            tracks = ("js",)
+        elif arg.startswith("html"):
+            tracks = ("html",)
+        n = 100
+        print(dim(f"Opening freeCodeCamp — 100 challenges each on {', '.join(tracks)}. "
+                  "Stops on its own when done; press Ctrl+C to interrupt."))
+        try:
+            learner.fcc_driver.run_session(state, n, tracks=tracks)
+        except KeyboardInterrupt:
+            print()
+            print(yellow("Paused by you (Ctrl+C). Progress saved."))
+        st.save(state)
+        fcc = state.get("fcc", {}).get("done", {})
+        print(green(f"  FCC done — js: {len(fcc.get('js', []))}, "
+                    f"html: {len(fcc.get('html', []))}"))
+    elif cmd in ("/teach", "/t"):
+        if LEARNER_OK:
+            learner.chat.teach(arg)
+    elif cmd in ("/quizme", "/quizme"):
+        if LEARNER_OK:
+            learner.chat.quizme(arg)
+    elif cmd == "/learner":
+        if LEARNER_OK:
+            show_learner(state)
+    elif cmd in ("/quit", "/exit", "/q"):
+        if st.quota_met(state):
+            print(green(line(FAREWELL)))
+            st.save(state)
+            return "exit"
+
+
+def show_stats(state):
+    print()
+    print(bold("┤ lifetime quiz stats"))
+    q = state.get("quiz", {})
+    if not q:
+        print(dim("none yet — start drilling."))
+        return
+    asked = q.get("asked_total", 0)
+    correct = q.get("correct_total", 0)
+    print(f"  asked        : {asked}")
+    print(f"  correct      : {correct}")
+    print(f"  accuracy     : {_accuracy(correct, asked)}")
+    print(f"  final streak : {state.get('streak', 0)}🔥")
+    per = q.get("per_subject", {})
+    if per:
+        print(bold("  per subject"))
+        for s in SUBJECTS:
+            p = per.get(s, {})
+            print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
+                  + f"{p.get('correct', 0)}/{p.get('asked', 0)} "
+                  + f"({_accuracy(p.get('correct', 0), p.get('asked', 0))})")
+    print("  top the SDF table first — it uses everything else.")
+
+
+def show_learner(state):
+    from learner import session as _s
+    learner = state.get("learner", {}) or {}
+    done = learner.get("done_problems", [])
+    n_done, n_total = _s.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({_s.problem_count()} entries)")
+    c = learner.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    fcc = state.get("fcc", {}).get("done", {})
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {len(fcc.get('js', []))} · html {len(fcc.get('html', []))}")
+    print("  To run FCC mode        : /freecode [N]   (default 4; 'js' or 'html' in arg limits track)")
+    print("  To run 100 challenges  : /freecode-100")
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
+def show_streak(state):
+    s = state.get("streak", 0)
+    print()
+    print(bold("┤ streak"))
+    print(f"  current   : {s} day{'s' if s != 1 else ''}🔥" if s else "  current   : broken")
+    print(f"  best      : {state.get('best_streak', 0)} day{'s' if state.get('best_streak', 0) != 1 else ''}")
+    if s:
+        print(dim(f"  keep it alive — every day matters. tomorrow's quota waits."))
+
+
+def learn(arg):
+    from learner import session as _s
+    cards = _s.C_CARDS
+    if not arg:
+        print()
+        print(bold("┤ study cards"))
+        for key, card in sorted(cards.items()):
+            print(f"  /learn {key:<12} {card['title']}")
+        return
+    if arg not in cards:
+        print(dim("no such card. /cards to list them."))
+        return
+    card = cards[arg]
+    print()
+    print(bold(card["title"]))
+    for b in card["body"]:
+        print(dim("  " + b))
+
+
+def ollama_reply(question):
+    exe = shutil.which("ollama")
+    if exe is None:
+        return None
+    prompt = (
+        "You are STRESS, a strict but caring drill-instructor tutor for machine "
+        "learning, data structures & algorithms and linear algebra. Answer "
+        "concisely:\n" + question
+    )
+    try:
+        proc = subprocess.run(
+            [exe, "run", OLLAMA_MODEL, prompt],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return (proc.stdout or "").strip() or None
+
+
+def chat_free(text):
+    reply = ollama_reply(text)
+    if reply:
+        print(cyan(reply))
+    else:
+        print(
+            f"No local LLM available. Install ollama and `{OLLAMA_MODEL}` "
+            f"(STRESS_OLLAMA_MODEL overrides) for real conversation. "
+            "Until then: drills. /more N"
+        )
+
+
+def _accuracy(correct, asked):
+    return "n/a" if not asked else f"{correct / asked:.0%}"
+
+
+def progress_bar(state):
+    asked = state.get("asked_total", 0)
+    width = 20
+    filled = int(width * asked / max(asked, 1))
+    return "[" + "█" * filled + "░" * (width - filled) + f"] {asked}"
+
+
+def finish_if_met(state):
+    if st.quota_met(state):
+        print()
+        print(green(line(PRAISE)))
+        state["finished_today"] = True
+        st.save(state)
+        return True
+    return False
+
+
+def show_stats(state):
+    print()
+    print(bold("┤ lifetime quiz stats"))
+    q = state.get("quiz", {})
+    if not q:
+        print(dim("none yet — start drilling."))
+        return
+    asked = q.get("asked_total", 0)
+    correct = q.get("correct_total", 0)
+    print(f"  asked        : {asked}")
+    print(f"  correct      : {correct}")
+    print(f"  accuracy     : {_accuracy(correct, asked)}")
+    print(f"  final streak : {state.get('streak', 0)}🔥")
+    per = q.get("per_subject", {})
+    if per:
+        print(bold("  per subject"))
+        for s in SUBJECTS:
+            p = per.get(s, {})
+            print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
+                  + f"{p.get('correct', 0)}/{p.get('asked', 0)} "
+                  + f"({_accuracy(p.get('correct', 0), p.get('asked', 0))})")
+    print("  top the SDF table first — it uses everything else.")
+
+
+def show_learner(state):
+    from learner import session as _s
+    learner = state.get("learner", {}) or {}
+    done = learner.get("done_problems", [])
+    n_done, n_total = _s.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({_s.problem_count()} entries)")
+    c = learner.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    fcc = state.get("fcc", {}).get("done", {})
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {len(fcc.get('js', []))} · html {len(fcc.get('html', []))}")
+    print("  To run FCC mode        : /freecode [N]   (default 4; 'js' or 'html' in arg limits track)")
+    print("  To run 100 challenges  : /freecode-100")
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
+def show_streak(state):
+    s = state.get("streak", 0)
+    print()
+    print(bold("┤ streak"))
+    print(f"  current   : {s} day{'s' if s != 1 else ''}🔥" if s else "  current   : broken")
+    print(f"  best      : {state.get('best_streak', 0)} day{'s' if state.get('best_streak', 0) != 1 else ''}")
+    if s:
+        print(dim(f"  keep it alive — every day matters. tomorrow's quota waits."))
+
+
+def learn(arg):
+    from learner import session as _s
+    cards = _s.C_CARDS
+    if not arg:
+        print()
+        print(bold("┤ study cards"))
+        for key, card in sorted(cards.items()):
+            print(f"  /learn {key:<12} {card['title']}")
+        return
+    if arg not in cards:
+        print(dim("no such card. /cards to list them."))
+        return
+    card = cards[arg]
+    print()
+    print(bold(card["title"]))
+    for b in card["body"]:
+        print(dim("  " + b))
+
+
+def ollama_reply(question):
+    exe = shutil.which("ollama")
+    if exe is None:
+        return None
+    prompt = (
+        "You are STRESS, a strict but caring drill-instructor tutor for machine "
+        "learning, data structures & algorithms and linear algebra. Answer "
+        "concisely:\n" + question
+    )
+    try:
+        proc = subprocess.run(
+            [exe, "run", OLLAMA_MODEL, prompt],
+            capture_output=True, text=True, timeout=180,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+    return (proc.stdout or "").strip() or None
+
+
+def chat_free(text):
+    reply = ollama_reply(text)
+    if reply:
+        print(cyan(reply))
+    else:
+        print(
+            f"No local LLM available. Install ollama and `{OLLAMA_MODEL}` "
+            f"(STRESS_OLLAMA_MODEL overrides) for real conversation. "
+            "Until then: drills. /more N"
+        )
+
+
+def _accuracy(correct, asked):
+    return "n/a" if not asked else f"{correct / asked:.0%}"
+
+
+def progress_bar(state):
+    asked = state.get("asked_total", 0)
+    width = 20
+    filled = int(width * asked / max(asked, 1))
+    return "[" + "█" * filled + "░" * (width - filled) + f"] {asked}"
+
+
+def finish_if_met(state):
+    if st.quota_met(state):
+        print()
+        print(green(line(PRAISE)))
+        state["finished_today"] = True
+        st.save(state)
+        return True
+    return False
+
+
+def show_stats(state):
+    print()
+    print(bold("┤ lifetime quiz stats"))
+    q = state.get("quiz", {})
+    if not q:
+        print(dim("none yet — start drilling."))
+        return
+    asked = q.get("asked_total", 0)
+    correct = q.get("correct_total", 0)
+    print(f"  asked        : {asked}")
+    print(f"  correct      : {correct}")
+    print(f"  accuracy     : {_accuracy(correct, asked)}")
+    print(f"  final streak : {state.get('streak', 0)}🔥")
+    per = q.get("per_subject", {})
+    if per:
+        print(bold("  per subject"))
+        for s in SUBJECTS:
+            p = per.get(s, {})
+            print(f"    {s:<4} {SUBJECT_NAMES[s]:<36} "
+                  + f"{p.get('correct', 0)}/{p.get('asked', 0)} "
+                  + f"({_accuracy(p.get('correct', 0), p.get('asked', 0))})")
+    print("  top the SDF table first — it uses everything else.")
+
+
+def show_learner(state):
+    from learner import session as _s
+    learner = state.get("learner", {}) or {}
+    done = learner.get("done_problems", [])
+    n_done, n_total = _s.progress(done)
+    print()
+    print(bold("┤ learner agent"))
+    print(f"  Problems in curriculum : {n_done}/{n_total}")
+    if done:
+        print(f"  Latest                 : {done[-1]}")
+    print(f"  Study journal          : journal/index.md  ({_s.problem_count()} entries)")
+    c = learner.get("concepts", {})
+    if c:
+        top = sorted(c.items(), key=lambda kv: -kv[1])[:6]
+        print("  Concepts covered       : " + ", ".join(f"{k}×{v}" for k, v in top))
+    fcc = state.get("fcc", {}).get("done", {})
+    print(bold("┤ fcc agent"))
+    print(f"  freeCodeCamp solved    : js {len(fcc.get('js', []))} · html {len(fcc.get('html', []))}")
+    print("  To run FCC mode        : /freecode [N]   (default 4; 'js' or 'html' in arg limits track)")
+    print("  To run 100 challenges  : /freecode-100")
+    print("  To train more          : /study [N]   To be taught: /teach")
+
+
+def show_streak(state):
+    s = state.get("streak", 0)
+    print()
+    print(bold("┤ streak"))
+    print(f"  current   : {s} day{'s' if s != 1 else ''}🔥" if s else "  current   : broken")
+    print(f"  best      : {state.get('best_streak', 0)} day{'s' if state.get('best_streak', 0) != 1 else ''}")
+    if s:
+        print(dim(f"  keep it alive — every day matters. tomorrow's quota waits."))
+
+
+def learn(arg):
+    from learner import session as _s
+    cards = _s.C_CARDS
+    if not arg:
+        print()
+        print(bold("┤ study cards"))
+        for key, card in sorted(cards.items()):
+            print(f"  /learn {key:<12} {card['title']}")
+        return
+    if arg not in cards:
+        print(dim("no such card. /cards to list them."))
+        return
+    card = cards[arg]
+    print()
+    print(bold(card["title"]))
+    for b in card["body"]:
+        print(dim("  " + b))
