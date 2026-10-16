@@ -119,24 +119,40 @@ class FCCBrowser:
 
     # ── editor interaction ──────────────────────────────────────────────
 
-    def set_code(self, page, code, first_only=False):
-        """Click into the editor, select-all, replace the content."""
-        clicked = False
+    def set_code(self, page, code):
+        """Replace the editor content, fastest path first.
+
+        1. fill() on Monaco's hidden textarea - instant, one event.
+        2. keyboard.insert_text() - one input event, no per-char delays.
+        3. last resort: typed with minimal delay.
+        The old path typed every char at 2ms - seconds to tens of seconds
+        of pure typing per challenge.
+        """
+        ta = page.locator("textarea").first
+        try:
+            ta.fill("", timeout=4000)          # clear old content
+            ta.fill(code, timeout=8000)
+            page.wait_for_timeout(150)
+            return
+        except Exception:
+            pass
+        # fall back: focus editor, select-all, one-shot insert
         for sel in (".monaco-editor textarea", ".monaco-editor", ".view-lines"):
             try:
-                page.locator(sel).first.click(timeout=6000)
-                clicked = True
+                page.locator(sel).first.click(timeout=4000)
                 break
             except Exception:
                 continue
-        if not clicked:
-            page.mouse.click(900, 450)      # editor pane on a 1380×900 view
-            page.wait_for_timeout(400)
+        else:
+            page.mouse.click(900, 450)      # editor pane (1380x900 view)
+            page.wait_for_timeout(200)
         page.keyboard.press("Control+A")
-        page.wait_for_timeout(250)
-        page.keyboard.type(code, delay=2)
-        page.wait_for_timeout(400)
-
+        page.wait_for_timeout(120)
+        try:
+            page.keyboard.insert_text(code)
+        except Exception:
+            page.keyboard.type(code, delay=1)
+        page.wait_for_timeout(150)
     # ── run + submit ────────────────────────────────────────────────────
 
     def click_run(self, page):
