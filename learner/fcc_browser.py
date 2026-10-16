@@ -48,14 +48,19 @@ class FCCBrowser:
 
     # ── navigation ──────────────────────────────────────────────────────
 
-    def open(self, url, wait=6):
+    def open(self, url, wait=2):
         page = self.ctx.new_page()
         page.goto(url, wait_until="domcontentloaded", timeout=40_000)
-        page.wait_for_timeout(wait * 1000)
+        ready_sel = ".monaco-editor, textarea, #description, [class*='description']"
+        try:
+            page.wait_for_selector(ready_sel, state="visible", timeout=15_000)
+            page.wait_for_timeout(wait * 1000)
+        except Exception:
+            page.wait_for_timeout(6_000)   # login walls / re-skins
         return page
 
     def open_challenge(self, slug):
-        return self.open(FCC + slug, wait=7)
+        return self.open(FCC + slug, wait=1)
 
     # ── login state ─────────────────────────────────────────────────────
 
@@ -108,7 +113,7 @@ class FCCBrowser:
         """Read current editor content via Monaco's textarea mirror."""
         try:
             ta = page.locator("textarea").first
-            return ta.input_value(timeout=4000)
+            return ta.input_value(timeout=2500)
         except Exception:
             return ""
 
