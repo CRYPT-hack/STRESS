@@ -146,13 +146,13 @@ def solve_challenge(page_ctl, page, track, challenge, max_tries=3):
         _say("brain", f"solution received ({provider}) - typing it in "
                       f"(attempt {attempt}/{max_tries})")
         page_ctl.set_code(page, code)
-        page.wait_for_timeout(800)
+        page.wait_for_timeout(200)
 
         if not page_ctl.click_run(page):
             _say("browser", "could not find the Run button")
             task["live_editor"] = page_ctl.editor_content(page) or ""
             continue
-        passed, fail_text = page_ctl.tests_passed(page, timeout=45)
+        passed, fail_text = page_ctl.tests_passed(page, timeout=30)
         _say("run", "ALL TESTS PASSED" if passed else
              textwrap.shorten(str(fail_text) or "tests did not pass", 200))
         if passed:
@@ -174,14 +174,6 @@ def run_session(state, n, tracks=("js", "html"), profile_dir=None):
     fcc = load_progress(state)
     done = fcc["done"]
 
-    brain_reply, provider = brain.think(
-        [{"role": "user", "content": "ping - 3 words max"}])
-    if not brain_reply:
-        print("\nNo brain: ollama is not running and no cloud key is set.")
-        print("  Install:    winget install ollama")
-        print("  Then:       ollama pull llama3")
-        print("  Or set env: STRESS_CLOUD_BASE_URL + STRESS_CLOUD_API_KEY")
-        return False
 
     for track in tracks:
         _say("fcc", f"=== {track.upper()} session -> {n} challenge(s) ===")
